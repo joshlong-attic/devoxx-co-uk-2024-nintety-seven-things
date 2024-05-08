@@ -8,6 +8,7 @@ import org.springframework.cloud.client.loadbalancer.LoadBalanced;
 import org.springframework.context.annotation.Bean;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.ResponseEntity;
+import org.springframework.retry.support.RetryTemplate;
 import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.ResponseBody;
@@ -21,6 +22,7 @@ public class ProductionApplication {
     public static void main(String[] args) {
         SpringApplication.run(ProductionApplication.class, args);
     }
+
 
     @Bean
     @LoadBalanced
@@ -39,22 +41,25 @@ public class ProductionApplication {
 class ReliableController {
 
     private final CircuitBreaker circuitBreaker;
-
+    private final RetryTemplate retryTemplate;
     private final RestClient http;
 
-    ReliableController(RestClient http, CircuitBreakerFactory<?,?> circuitBreakerFactory) {
+    ReliableController(RestClient http, CircuitBreakerFactory<?, ?> circuitBreakerFactory, RetryTemplate retryTemplate) {
         this.circuitBreaker = circuitBreakerFactory.create("try");
         this.http = http;
+        this.retryTemplate = retryTemplate;
     }
 
     @GetMapping("/try")
     ResponseEntity<?> call() {
         var ptr = new ParameterizedTypeReference<Map<String, String>>() { };
         var url = "http://service/oops";
-        return this.circuitBreaker.run(
-            () -> this.http.get().uri(url).retrieve().toEntity(ptr),
-            throwable -> ResponseEntity.ok().body(Map.of("message", "oops!"))
-        );
+        System.out.println("----------------");
+        return retryTemplate.execute(context -> circuitBreaker
+                .run(
+                        () -> http.get().uri(url).retrieve().toEntity(ptr),
+                        throwable -> ResponseEntity.ok().body(Map.of("message", "oops!"))
+                ));
     }
 
 }
