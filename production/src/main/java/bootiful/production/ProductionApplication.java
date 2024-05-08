@@ -4,6 +4,7 @@ import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.cloud.client.circuitbreaker.CircuitBreaker;
 import org.springframework.cloud.client.circuitbreaker.CircuitBreakerFactory;
+import org.springframework.cloud.client.loadbalancer.LoadBalanced;
 import org.springframework.context.annotation.Bean;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.ResponseEntity;
@@ -11,6 +12,8 @@ import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.ResponseBody;
 import org.springframework.web.client.RestClient;
+
+import java.util.Map;
 
 @SpringBootApplication
 public class ProductionApplication {
@@ -20,8 +23,14 @@ public class ProductionApplication {
     }
 
     @Bean
-    RestClient http() {
-        return RestClient.builder().build();
+    @LoadBalanced
+    RestClient.Builder restClientBuilder() {
+        return RestClient.builder();
+    }
+
+    @Bean
+    RestClient restClient(RestClient.Builder builder) {
+        return builder.build();
     }
 }
 
@@ -29,24 +38,23 @@ public class ProductionApplication {
 @ResponseBody
 class ReliableController {
 
-    private final CircuitBreaker cb;
+    private final CircuitBreaker circuitBreaker;
 
     private final RestClient http;
 
     ReliableController(RestClient http, CircuitBreakerFactory<?,?> circuitBreakerFactory) {
-        this.cb = circuitBreakerFactory.create("try");
+        this.circuitBreaker = circuitBreakerFactory.create("try");
         this.http = http;
     }
 
     @GetMapping("/try")
     ResponseEntity<?> call() {
-        return this.cb.run(() -> this.http
-                        .get()
-                        .uri("https://httpbingo.org/unstable")
-                        .retrieve()
-                        .toEntity(new ParameterizedTypeReference<>() {
-                        }),
-                throwable -> ResponseEntity.notFound().build());
+        var ptr = new ParameterizedTypeReference<Map<String, String>>() { };
+        var url = "http://service/oops";
+        return this.circuitBreaker.run(
+            () -> this.http.get().uri(url).retrieve().toEntity(ptr),
+            throwable -> ResponseEntity.ok().body(Map.of("message", "oops!"))
+        );
     }
 
 }
