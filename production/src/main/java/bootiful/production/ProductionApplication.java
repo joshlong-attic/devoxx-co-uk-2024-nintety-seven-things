@@ -23,6 +23,10 @@ public class ProductionApplication {
         SpringApplication.run(ProductionApplication.class, args);
     }
 
+    @Bean
+    RetryTemplate retryTemplate (){
+        return new RetryTemplate();
+    }
 
     @Bean
     @LoadBalanced
@@ -44,6 +48,7 @@ class ReliableController {
     private final RetryTemplate retryTemplate;
     private final RestClient http;
 
+
     ReliableController(RestClient http, CircuitBreakerFactory<?, ?> circuitBreakerFactory, RetryTemplate retryTemplate) {
         this.circuitBreaker = circuitBreakerFactory.create("try");
         this.http = http;
@@ -53,13 +58,10 @@ class ReliableController {
     @GetMapping("/try")
     ResponseEntity<?> call() {
         var ptr = new ParameterizedTypeReference<Map<String, String>>() { };
-        var url = "http://service/oops";
-        System.out.println("----------------");
         return retryTemplate.execute(context -> circuitBreaker
                 .run(
-                        () -> http.get().uri(url).retrieve().toEntity(ptr),
+                        () -> http.get().uri("http://service/oops").retrieve().toEntity(ptr),
                         throwable -> ResponseEntity.ok().body(Map.of("message", "oops!"))
                 ));
     }
-
 }
