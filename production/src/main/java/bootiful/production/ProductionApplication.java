@@ -45,23 +45,30 @@ public class ProductionApplication {
 class ReliableController {
 
     private final CircuitBreaker circuitBreaker;
-    private final RetryTemplate retryTemplate;
+
     private final RestClient http;
 
+    //private final RetryTemplate retryTemplate;
 
-    ReliableController(RestClient http, CircuitBreakerFactory<?, ?> circuitBreakerFactory, RetryTemplate retryTemplate) {
+    ReliableController(
+            RestClient http,
+            CircuitBreakerFactory<?, ?> circuitBreakerFactory
+            // , RetryTemplate retryTemplate
+    ) {
         this.circuitBreaker = circuitBreakerFactory.create("try");
         this.http = http;
-        this.retryTemplate = retryTemplate;
+        //this.retryTemplate = retryTemplate;
     }
 
     @GetMapping("/try")
     ResponseEntity<?> call() {
         var ptr = new ParameterizedTypeReference<Map<String, String>>() { };
-        return retryTemplate.execute(context -> circuitBreaker
+        return // retryTemplate.execute(context ->
+                this.circuitBreaker
                 .run(
                         () -> http.get().uri("http://service/oops").retrieve().toEntity(ptr),
                         throwable -> ResponseEntity.ok().body(Map.of("message", "oops!"))
-                ));
+                );
+        //);
     }
 }

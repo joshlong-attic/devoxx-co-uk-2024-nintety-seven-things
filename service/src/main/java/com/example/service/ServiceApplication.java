@@ -31,7 +31,7 @@ public class ServiceApplication {
 
     @GetMapping("/oops")
     ResponseEntity<?> oops() {
-        return Math.random() > .8 ?
+        return Math.random() > .5 ?
                 ResponseEntity.ok(Map.of("message", "Hello from port " + this.port.get())) :
                 ResponseEntity.notFound().build();
     }
